@@ -1,6 +1,6 @@
 import torch 
 import torch as nn
-import torch.nn.Functional as F
+import torch.nn.functional as F
 
 class FeedForward(nn.Module):
     def __init__(self,embedded_size,d_ff):
