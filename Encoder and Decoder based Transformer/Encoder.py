@@ -30,6 +30,6 @@ class EncoderLayer(nn.Module):
 
         ffn_out=self.ffn(x)
         encoder_output=x+self.dropout2(ffn_out)
-        encoder_output=self.norm2(x)
+        encoder_output=self.norm2(encoder_output)
 
         return encoder_output
