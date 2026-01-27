@@ -7,41 +7,29 @@ from FeedForward import FeedForward
 from multi_head_attention import MultiHeadAttention
 from PostionalEncoding import PostionalEncoding
 
-batch_size=2
-seq_len=5
-embedded_size=8
-num_heads=2
+class EncoderLayer(nn.Module):
+    def __init__(self,embedded_size,num_heads,dff=None,dropout=0.1):
+        super().__init__()
 
-#Dummy Embeddings
-x=torch.rand(batch_size,seq_len,embedded_size)
+        if dff is None:
+            dff=4*embedded_size
+        
+        self.self_attn=MultiHeadAttention(embedded_size,num_heads,dropout=dropout)
+        self.norm1=nn.LayerNorm(embedded_size)
+        self.dropout1=nn.Dropout(dropout)
 
-#Step 1 : Postional Encoding
-pos_enc=PostionalEncoding(embedded_size)
-x=pos_enc(x)
-#step 2 : After the Positional Encoding 
-mha=MultiHeadAttention(embedded_size,num_heads)
-out=mha(x)
-print("Output after multi-head attention : \n",out.shape)
-#Step3 : Residual connection with the output
-residual=x+out
-#Step4:Layer Normalization of the output from residual connection
+        self.ffn=FeedForward(embedded_size,dff)
+        self.norm2=nn.LayerNorm(embedded_size)
+        self.dropout2=nn.Dropout(dropout)
 
-norm=nn.LayerNorm(embedded_size)
-out_norm=norm(residual)
+    def forward(self,x):
+        # Multihead self attention
+        attn_out=self.self_attn(x)
+        x=x+self.dropout1(attn_out)
+        x=self.norm1(x)
 
-print("Shape after Add& Norm",out_norm.shape)
+        ffn_out=self.ffn(x)
+        encoder_output=x+self.dropout2(ffn_out)
+        encoder_output=self.norm2(x)
 
-
-#Step 5 : After the output is normalized  we proceed in FFN
-batch_size,seq_len,embedded_size=out_norm.shape
-dff=4*embedded_size
-ffn=FeedForward(embedded_size,dff)
-ffn_out=ffn(out_norm)
-print("Output from FFN",out_norm.shape)
-
-
-#Step6:
-residual2=out_norm+ffn_out
-norm2=nn.Layernorm(embedded_size)
-final_output=norm2(residual2)
-
+        return encoder_output
