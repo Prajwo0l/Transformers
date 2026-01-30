@@ -3,50 +3,66 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class MaskedMultiHeadAttention(nn.Module):
-    def __init__(self,embedded_size,num_heads,dropout=0.1,context_length=512):
+    def __init__(self, embed_size, num_heads, dropout=0.1):
         super().__init__()
-        assert embedded_size%num_heads==0
+        assert embed_size % num_heads == 0
 
-        self.embedded_size=embedded_size
-        self.num_heads=num_heads
-        self.head_size=embedded_size//num_heads
+        self.embed_size = embed_size
+        self.num_heads  = num_heads
+        self.head_dim   = embed_size // num_heads
 
-        self.query=nn.Linear(embedded_size,embedded_size)
-        self.key=nn.Linear(embedded_size,embedded_size)
-        self.value=nn.Linear(embedded_size,embedded_size)
-        self.out_proj=nn.Linear(embedded_size,embedded_size)
+        self.q_proj = nn.Linear(embed_size, embed_size)
+        self.k_proj = nn.Linear(embed_size, embed_size)
+        self.v_proj = nn.Linear(embed_size, embed_size)
+        self.out    = nn.Linear(embed_size, embed_size)
 
-        self.dropout=nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
-        self.register_buffer("mask", torch.triu(torch.ones(context_length, context_length), diagonal=1))
+        # Causal (future) mask – upper triangle
+        self.register_buffer(
+            "causal_mask",
+            torch.triu(torch.ones(5000, 5000), diagonal=1).bool()
+        )
 
+    def forward(self, x, padding_mask=None):
+        """
+        x: (B, T, C)
+        padding_mask: (B, T) boolean, True = keep (real token), False = mask (padding)
+        """
+        B, T, C = x.shape
 
-    def forward(self,x):
-        batch_size,seq_len,_=x.size()
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
 
-        Q=self.query(x)
-        K=self.key(x)
-        V=self.value(x)
+        # Reshape to (B, nh, T, hd)
+        Q = Q.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
-        #Reshape and transpose forr multi head attention
-        Q=Q.view(batch_size,seq_len,self.num_heads,self.head_dim).transpose(1,2)
-        K=K.view(batch_size,seq_len,self.num_heads,self.head_dim).transpose(1,2)
-        V=V.view(batch_size,seq_len,self.num_heads,self.head_dim).transpose(1,2)
+        # Attention scores
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * (self.head_dim ** -0.5)
 
-        scores=torch.matmul(Q,K.transpose(-2,-1))/(self.head_dim**0.5)
-        #Apply causal mask:set future postions to -inf before softmax
-        mask=self.mask[:seq_len,:seq_len].bool()
-        scores=scores.masked_fill(mask,float("-inf"))
+        # 1. Apply causal mask (no looking at future tokens)
+        causal_m = self.causal_mask[:T, :T]                  # (T, T)
+        scores = scores.masked_fill(causal_m, float('-inf'))
 
-        #Apply softmax to get attention weights
-        scores=F.softmax(scores,dim=-1)
-        scores=self.dropout(scores)
+        # 2. Apply padding mask (mask out padding positions in keys)
+        if padding_mask is not None:
+            # padding_mask: (B, T) → expand to (B, 1, 1, T) for broadcasting over heads & queries
+            # We want to mask where padding_mask == False
+            scores = scores.masked_fill(
+                ~padding_mask.unsqueeze(1).unsqueeze(2),   # (B, 1, 1, T)
+                float('-inf')
+            )
 
-        #Compute context vectors
-        context_vec=torch.matmul(scores,V)
+        # Softmax + dropout
+        attn = F.softmax(scores, dim=-1)
+        attn = self.dropout(attn)
 
-        #Concatenate head and project back
-        context_vec=context_vec.transpose(1,2).contiguous().view(batch_size,seq_len,self.embedded_size)
-        output=self.out_proj(context_vec)
+        # Apply attention to values
+        out = torch.matmul(attn, V)
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
 
-        return output
+        out = self.out(out)
+        return out

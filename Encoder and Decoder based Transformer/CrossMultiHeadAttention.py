@@ -4,38 +4,59 @@ import torch.nn.functional as F
 
 
 class CrossMultiHeadAttention(nn.Module):
-    def __init__(self,embedded_size,num_heads):
+    def __init__(self, embed_size, num_heads, dropout=0.1):
         super().__init__()
-        self.num_heads=num_heads
-        self.embedded_size=embedded_size
-        self.head_dim=embedded_size//num_heads
-        assert embedded_size%num_heads==0
+        assert embed_size % num_heads == 0
 
-        self.query=nn.Linear(embedded_size,embedded_size)
-        self.key=nn.Linear(embedded_size,embedded_size)
-        self.value=nn.Linear(embedded_size,embedded_size)
-        
-        self.fc_out=nn.Linear(embedded_size,embedded_size)
+        self.embed_size = embed_size
+        self.num_heads  = num_heads
+        self.head_dim   = embed_size // num_heads
 
-    def forward(self,x_query,x_kv=None,mask=None):
-        if x_kv is None:
-            x_kv=x_query
-        batch_size,seq_length,embedded_size=x_query.shape
-        encoder_len=x_kv.shape[1]
+        self.q_proj = nn.Linear(embed_size, embed_size)
+        self.k_proj = nn.Linear(embed_size, embed_size)
+        self.v_proj = nn.Linear(embed_size, embed_size)
+        self.out    = nn.Linear(embed_size, embed_size)
 
-        Q=self.query(x_query)
-        K=self.key(x_kv)
-        V=self.value(x_kv)
+        self.dropout = nn.Dropout(dropout)
 
-        Q=Q.view(batch_size,seq_length,self.num_heads,self.head_dim).transpose(1,2)
-        K=K.view(batch_size,encoder_len,self.num_heads,self.head_dim).transpose(1,2)
-        V=V.view(batch_size,encoder_len,self.num_heads,self.head_dim).transpose(1,2)
+    def forward(self, query_input, key_value_input=None, padding_mask=None):
+        """
+        query_input:     (B, tgt_len, embed)   ← from decoder
+        key_value_input: (B, src_len, embed)   ← from encoder
+        padding_mask:    (B, src_len) boolean, True = valid token, False = pad
+        """
+        if key_value_input is None:
+            key_value_input = query_input
 
-        scores=torch.matmul(Q,K.transpose(-2,-1))/(self.head_dim**0.5)
-        attention=F.softmax(scores,dim=-1)
-        output=torch.matmul(attention, V)
+        B, Tq, C = query_input.shape
+        _, Tk, _ = key_value_input.shape
 
-        output=output.transpose(1,2).contiguous().view(batch_size,seq_length,self.embedded_size)
+        Q = self.q_proj(query_input)
+        K = self.k_proj(key_value_input)
+        V = self.v_proj(key_value_input)
 
-        output=self.fc_out(output)
-        return output
+        # Reshape → (B, nh, T, hd)
+        Q = Q.view(B, Tq, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(B, Tk, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(B, Tk, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Attention scores
+        scores = torch.matmul(Q, K.transpose(-2, -1)) * (self.head_dim ** -0.5)
+
+        # Apply padding mask on the key dimension (src side)
+        if padding_mask is not None:
+            # padding_mask (B, src_len) → expand to (B, 1, 1, src_len)
+            # We mask where padding_mask == False
+            scores = scores.masked_fill(
+                ~padding_mask.unsqueeze(1).unsqueeze(2),
+                float('-inf')
+            )
+
+        attn_weights = F.softmax(scores, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+
+        out = torch.matmul(attn_weights, V)
+        out = out.transpose(1, 2).contiguous().view(B, Tq, C)
+
+        out = self.out(out)
+        return out
