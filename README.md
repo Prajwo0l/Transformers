@@ -1,13 +1,13 @@
 # Transformer From Scratch – “Attention Is All You Need” Implementation
 
-📌 Overview
+## 📌 Overview
 
 This project is a from-scratch PyTorch implementation of the Transformer architecture proposed in the paper “Attention Is All You Need” (Vaswani et al., 2017).
 The goal of this project is to deeply understand and replicate the original encoder–decoder Transformer model without relying on high-level frameworks such as HuggingFace Transformers.
 
 The implementation includes all core components of the Transformer, including positional encoding, multi-head self-attention, encoder and decoder layers, and feed-forward networks.
 
-🧠 Key Concepts Implemented
+## 🧠 Key Concepts Implemented
 
 This repository implements the following components from the original paper:
 
@@ -49,7 +49,8 @@ End-to-end Transformer architecture replicating the original paper
 
 Modular and reusable PyTorch classes
 
-🏗️ Project Structure
+## 🏗️ Project Structure
+```text
 ├── FeedForward.py
 ├── MultiHeadAttention.py
 ├── PositionalEncoding.py
@@ -59,7 +60,8 @@ Modular and reusable PyTorch classes
 ├── train.py (optional)
 └── README.md
 
-⚙️ Technologies Used
+
+## ⚙️ Technologies Used
 
 Python 3.x
 
@@ -69,11 +71,14 @@ NumPy
 
 Math (for sinusoidal positional encoding)
 
-🚀 How to Run
+```python
+
+##  🚀 How to Run
 Install dependencies
 pip install torch
 
-Example Usage
+## Example Usage
+```python
 from Transformer import Transformer
 import torch
 
@@ -91,7 +96,8 @@ tgt = torch.randint(0, 1000, (32, 50))
 out = model(src, tgt)
 print(out.shape)
 
-📖 Learning Goals of This Project
+
+## 📖 Learning Goals of This Project
 
 Understand the mathematical and architectural foundations of Transformers
 
@@ -101,12 +107,12 @@ Learn tensor shape manipulation, masking, and multi-head attention internals
 
 Build a reusable Transformer architecture for future research and experiments
 
-📚 Reference Paper
+## 📚 Reference Paper
 
 Vaswani et al., Attention Is All You Need, NeurIPS 2017
 https://arxiv.org/abs/1706.03762
 
-🧩 Future Improvements
+## 🧩 Future Improvements
 
 Add training loop for machine translation tasks
 
@@ -120,12 +126,7 @@ Implement GPT-style decoder-only Transformer
 
 Benchmark against HuggingFace Transformer outputs
 
-👤 Author
 
-Riva
-Bachelor in Artificial Intelligence
-Passionate about deep learning, transformers, and building models from scratch.
-
-⭐ Acknowledgements
+## ⭐ Acknowledgements
 
 This project was built for educational purposes to deeply understand the Transformer architecture and its internal workings.
