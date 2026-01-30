@@ -59,7 +59,7 @@ Modular and reusable PyTorch classes
 ├── Transformer.py
 ├── train.py (optional)
 └── README.md
-
+```
 
 ## ⚙️ Technologies Used
 
@@ -71,13 +71,14 @@ NumPy
 
 Math (for sinusoidal positional encoding)
 
-```python
+
 
 ##  🚀 How to Run
 Install dependencies
 pip install torch
 
 ## Example Usage
+
 ```python
 from Transformer import Transformer
 import torch
@@ -95,7 +96,7 @@ tgt = torch.randint(0, 1000, (32, 50))
 
 out = model(src, tgt)
 print(out.shape)
-
+```
 
 ## 📖 Learning Goals of This Project
 
