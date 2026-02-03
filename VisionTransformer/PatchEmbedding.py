@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import functional as F
+
 
 
 img_size=28
