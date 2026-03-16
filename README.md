@@ -1,133 +1,76 @@
-# Transformer From Scratch – “Attention Is All You Need” Implementation
+# Transformers From Scratch
 
-## 📌 Overview
+A collection of Transformer architecture implementations built entirely from scratch using PyTorch — no high-level libraries like HuggingFace or `timm`. Each sub-project is a self-contained, modular implementation aimed at deeply understanding the internals of Transformer-based models.
 
-This project is a from-scratch PyTorch implementation of the Transformer architecture proposed in the paper “Attention Is All You Need” (Vaswani et al., 2017).
-The goal of this project is to deeply understand and replicate the original encoder–decoder Transformer model without relying on high-level frameworks such as HuggingFace Transformers.
+---
 
-The implementation includes all core components of the Transformer, including positional encoding, multi-head self-attention, encoder and decoder layers, and feed-forward networks.
+## Repository Structure
 
-## 🧠 Key Concepts Implemented
-
-This repository implements the following components from the original paper:
-
-1. Positional Encoding
-
-Sinusoidal positional encoding as described in the paper
-
-Added to token embeddings to inject sequence order information
-
-2. Multi-Head Attention
-
-Linear projections for Query, Key, and Value
-
-Head splitting and parallel attention computation
-
-Scaled dot-product attention
-
-Head concatenation and final linear projection (fc_out)
-
-3. Transformer Encoder
-
-Stacked encoder layers (configurable number of layers)
-
-Self-attention + residual connections + layer normalization
-
-Position-wise feed-forward networks
-
-4. Transformer Decoder
-
-Masked self-attention for autoregressive decoding
-
-Cross-attention (decoder queries, encoder keys/values)
-
-Feed-forward layers with residual connections and normalization
-
-5. Complete Encoder–Decoder Transformer
-
-End-to-end Transformer architecture replicating the original paper
-
-Modular and reusable PyTorch classes
-
-## 🏗️ Project Structure
-```text
-├── FeedForward.py
-├── MultiHeadAttention.py
-├── PositionalEncoding.py
-├── EncoderLayer.py
-├── DecoderLayer.py
-├── Transformer.py
-├── train.py (optional)
-└── README.md
+```
+Transformers/
+├── Encoder and Decoder based Transformer/   # Full seq2seq Transformer (Vaswani et al., 2017)
+│   ├── PostionalEncoding.py
+│   ├── FeedForward.py
+│   ├── multi_head_attention.py
+│   ├── MaskedMultiHeadAttention.py
+│   ├── CrossMultiHeadAttention.py
+│   ├── Encoder.py
+│   ├── Decoder.py
+│   ├── Transformer.py
+│   └── README.md
+│
+├── VisionTransformer/                       # ViT (Dosovitskiy et al., 2020)
+│   ├── PatchEmbedding.py
+│   ├── MultiHeadAttention.py
+│   ├── PostionalEncoding.py
+│   ├── TransformerEncoder.py
+│   ├── Classification.py
+│   ├── VisionTransformer.py
+│   ├── ViT_Experiment.ipynb
+│   └── README.md
+│
+└── README.md                                # This file
 ```
 
-## ⚙️ Technologies Used
+---
 
-Python 3.x
+## Projects
 
-PyTorch
+### 1. Encoder–Decoder Transformer
+> Paper: [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — Vaswani et al., NeurIPS 2017
 
-NumPy
+A complete PyTorch implementation of the original sequence-to-sequence Transformer. Covers sinusoidal positional encoding, multi-head self-attention, masked self-attention, cross-attention, stacked encoder/decoder layers, and a full end-to-end Transformer class with embedding weight tying.
 
-Math (for sinusoidal positional encoding)
+→ See [`Encoder and Decoder based Transformer/README.md`](./Encoder%20and%20Decoder%20based%20Transformer/README.md)
 
+---
 
+### 2. Vision Transformer (ViT)
+> Paper: [An Image is Worth 16×16 Words](https://arxiv.org/abs/2010.11929) — Dosovitskiy et al., ICLR 2021
 
-##  🚀 How to Run
-Install dependencies
-pip install torch
+A pure PyTorch implementation of the Vision Transformer applied to image classification. Covers patch embedding via convolution, learnable class token and positional embeddings, stacked Transformer encoder blocks with Pre-LN and GELU, and an MLP classification head. Trained and evaluated on MNIST.
 
-## Example Usage
+→ See [`VisionTransformer/README.md`](./VisionTransformer/README.md)
 
-```python
-from Transformer import Transformer
-import torch
+---
 
-model = Transformer(
-    d_model=512,
-    num_heads=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    d_ff=2048
-)
+## Motivation
 
-src = torch.randint(0, 1000, (32, 50))   # batch_size=32, seq_len=50
-tgt = torch.randint(0, 1000, (32, 50))
+Both projects were built with the same philosophy: implement everything manually, understand every tensor operation, and avoid abstracting away the core mechanics behind library calls. The goal is not just working code — it's a working mental model of how Transformers operate at every level.
 
-out = model(src, tgt)
-print(out.shape)
+---
+
+## Requirements
+
+```bash
+pip install torch numpy jupyter
 ```
 
-## 📖 Learning Goals of This Project
+Python 3.8+ and PyTorch 2.0+ recommended.
 
-Understand the mathematical and architectural foundations of Transformers
+---
 
-Implement attention mechanisms manually instead of using high-level libraries
+## References
 
-Learn tensor shape manipulation, masking, and multi-head attention internals
-
-Build a reusable Transformer architecture for future research and experiments
-
-## 📚 Reference Paper
-
-Vaswani et al., Attention Is All You Need, NeurIPS 2017
-https://arxiv.org/abs/1706.03762
-
-## 🧩 Future Improvements
-
-Add training loop for machine translation tasks
-
-Implement learned and rotary positional embeddings
-
-Add visualization for attention weights
-
-Optimize with PyTorch Lightning or Accelerate
-
-Implement GPT-style decoder-only Transformer
-
-Benchmark against HuggingFace Transformer outputs
-
-
-## ⭐ Acknowledgements
-
-This project was built for educational purposes to deeply understand the Transformer architecture and its internal workings.
+- Vaswani et al. — *Attention Is All You Need* (2017) — https://arxiv.org/abs/1706.03762
+- Dosovitskiy et al. — *An Image is Worth 16×16 Words* (2020) — https://arxiv.org/abs/2010.11929

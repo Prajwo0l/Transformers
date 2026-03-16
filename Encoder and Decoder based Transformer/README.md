@@ -1,133 +1,207 @@
-# Transformer From Scratch – “Attention Is All You Need” Implementation
+# Encoder–Decoder Transformer From Scratch
 
-## 📌 Overview
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen)](https://python.org)
+[![Paper](https://img.shields.io/badge/Paper-Attention%20Is%20All%20You%20Need-blue)](https://arxiv.org/abs/1706.03762)
 
-This project is a from-scratch PyTorch implementation of the Transformer architecture proposed in the paper “Attention Is All You Need” (Vaswani et al., 2017).
-The goal of this project is to deeply understand and replicate the original encoder–decoder Transformer model without relying on high-level frameworks such as HuggingFace Transformers.
+A complete, from-scratch PyTorch implementation of the original Transformer architecture introduced in **"Attention Is All You Need"** (Vaswani et al., NeurIPS 2017). Every component — from sinusoidal positional encoding to the full encoder–decoder stack — is implemented manually without relying on `nn.Transformer` or any high-level abstraction.
 
-The implementation includes all core components of the Transformer, including positional encoding, multi-head self-attention, encoder and decoder layers, and feed-forward networks.
+---
 
-## 🧠 Key Concepts Implemented
+## Architecture Overview
 
-This repository implements the following components from the original paper:
+```
+Input Tokens                          Target Tokens
+     │                                      │
+  Embedding + sqrt(d_model)            Embedding + sqrt(d_model)
+     │                                      │
+  Positional Encoding               Positional Encoding
+     │                                      │
+┌────▼────────────────────┐    ┌─────▼──────────────────────────┐
+│    Encoder (×N layers)  │    │      Decoder (×N layers)        │
+│                         │    │                                  │
+│  ┌─────────────────┐    │    │  ┌──────────────────────────┐   │
+│  │ Multi-Head      │    │    │  │ Masked Multi-Head        │   │
+│  │ Self-Attention  │    │    │  │ Self-Attention (causal)  │   │
+│  └────────┬────────┘    │    │  └─────────────┬────────────┘   │
+│  Add & LayerNorm        │    │  Add & LayerNorm               │
+│  ┌─────────────────┐    │    │  ┌──────────────────────────┐   │
+│  │ Feed-Forward    │    │    │  │ Cross-Attention          │◄──┼── encoder output
+│  │ Network         │    │    │  │ (Q from decoder,         │   │
+│  └────────┬────────┘    │    │  │  K/V from encoder)       │   │
+│  Add & LayerNorm        │    │  └─────────────┬────────────┘   │
+└────────────┼────────────┘    │  Add & LayerNorm               │
+             │                 │  ┌──────────────────────────┐   │
+             └────────────────►│  │ Feed-Forward Network     │   │
+                               │  └─────────────┬────────────┘   │
+                               │  Add & LayerNorm               │
+                               └──────────────────┬─────────────┘
+                                                  │
+                                          Linear Projection
+                                                  │
+                                            Logits (vocab)
+```
 
-1. Positional Encoding
+---
 
-Sinusoidal positional encoding as described in the paper
+## Components
 
-Added to token embeddings to inject sequence order information
+### `PostionalEncoding.py` — Sinusoidal Positional Encoding
 
-2. Multi-Head Attention
+Implements the fixed sinusoidal encoding from the paper. Even indices use `sin`, odd indices use `cos`, with frequencies defined by:
 
-Linear projections for Query, Key, and Value
+```
+PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))
+PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+```
 
-Head splitting and parallel attention computation
+The encoding is precomputed up to `max_seq_len=5000` and stored as a non-trainable buffer. Token embeddings are scaled by `sqrt(d_model)` before the positional encoding is added, matching the paper exactly.
 
-Scaled dot-product attention
+---
 
-Head concatenation and final linear projection (fc_out)
+### `FeedForward.py` — Position-wise Feed-Forward Network
 
-3. Transformer Encoder
+A two-layer MLP applied independently to each position:
 
-Stacked encoder layers (configurable number of layers)
+```
+FFN(x) = ReLU(x W₁ + b₁) W₂ + b₂
+```
 
-Self-attention + residual connections + layer normalization
+The inner dimension `d_ff` defaults to `4 × d_model` (e.g., 2048 when `d_model=512`), consistent with the original paper.
 
-Position-wise feed-forward networks
+---
 
-4. Transformer Decoder
+### `multi_head_attention.py` — Multi-Head Self-Attention
 
-Masked self-attention for autoregressive decoding
+Implements scaled dot-product attention with multiple parallel heads:
 
-Cross-attention (decoder queries, encoder keys/values)
+1. Project input into Q, K, V via separate `nn.Linear` layers
+2. Split into `num_heads` heads along the embedding dimension
+3. Compute scaled dot-product attention: `softmax(QKᵀ / sqrt(head_dim)) · V`
+4. Concatenate heads and project through `fc_out`
 
-Feed-forward layers with residual connections and normalization
+Supports an optional boolean padding mask (`True` = keep, `False` = mask).
 
-5. Complete Encoder–Decoder Transformer
+---
 
-End-to-end Transformer architecture replicating the original paper
+### `MaskedMultiHeadAttention.py` — Causal (Masked) Self-Attention
 
-Modular and reusable PyTorch classes
+Extends multi-head attention with an autoregressive causal mask. A precomputed upper-triangular boolean mask (registered as a buffer) blocks each position from attending to future positions. Both the causal mask and an optional padding mask are applied simultaneously to the attention scores before softmax.
 
-## 🏗️ Project Structure
-```text
-├── FeedForward.py
-├── MultiHeadAttention.py
-├── PositionalEncoding.py
-├── EncoderLayer.py
-├── DecoderLayer.py
-├── Transformer.py
-├── train.py (optional)
+---
+
+### `CrossMultiHeadAttention.py` — Cross-Attention
+
+Implements decoder-to-encoder attention. Queries come from the decoder's current hidden state, while Keys and Values come from the encoder output:
+
+- `Q` ← decoder hidden state (`tgt_len`)
+- `K`, `V` ← encoder output (`src_len`)
+
+Supports a source-side padding mask to prevent attention over encoder padding tokens.
+
+---
+
+### `Encoder.py` — Transformer Encoder
+
+**`TransformerEncoderBlock`**: A single encoder layer consisting of:
+- Multi-head self-attention → residual + LayerNorm
+- Feed-forward network → residual + LayerNorm
+- Dropout applied to both sub-layers
+
+**`TransformerEncoder`**: Stacks `num_layers` encoder blocks followed by a final `LayerNorm`.
+
+---
+
+### `Decoder.py` — Transformer Decoder
+
+**`DecoderLayer`**: A single decoder layer consisting of:
+1. Masked multi-head self-attention (causal + padding mask) → residual + LayerNorm
+2. Cross-attention over encoder output (source padding mask) → residual + LayerNorm
+3. Feed-forward network → residual + LayerNorm
+
+**`TransformerDecoder`**: Stacks `num_layers` decoder blocks followed by a final `LayerNorm`.
+
+---
+
+### `Transformer.py` — Full Encoder–Decoder Transformer
+
+The top-level module that wires everything together:
+
+- Separate source and target token embeddings (`nn.Embedding` with `padding_idx=0`)
+- Shared sinusoidal positional encoding applied to both
+- Stacked encoder and decoder
+- Final linear projection to vocabulary logits
+- **Weight tying**: the target embedding matrix is shared with the output projection (`out_proj.weight = tgt_embedding.weight`), as recommended in the paper
+
+---
+
+## Project Structure
+
+```
+Encoder and Decoder based Transformer/
+├── PostionalEncoding.py          # Sinusoidal positional encoding
+├── FeedForward.py                # Position-wise FFN (ReLU, d_ff = 4×d_model)
+├── multi_head_attention.py       # Multi-head self-attention
+├── MaskedMultiHeadAttention.py   # Causal + padding masked self-attention
+├── CrossMultiHeadAttention.py    # Decoder-to-encoder cross-attention
+├── Encoder.py                    # Encoder block + stacked encoder
+├── Decoder.py                    # Decoder layer + stacked decoder
+├── Transformer.py                # Full seq2seq Transformer
 └── README.md
 ```
 
-## ⚙️ Technologies Used
+---
 
-Python 3.x
+## Usage
 
-PyTorch
-
-NumPy
-
-Math (for sinusoidal positional encoding)
-
-
-
-##  🚀 How to Run
-Install dependencies
+```bash
 pip install torch
-
-## Example Usage
-
-```python
-from Transformer import Transformer
-import torch
-
-model = Transformer(
-    d_model=512,
-    num_heads=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    d_ff=2048
-)
-
-src = torch.randint(0, 1000, (32, 50))   # batch_size=32, seq_len=50
-tgt = torch.randint(0, 1000, (32, 50))
-
-out = model(src, tgt)
-print(out.shape)
 ```
 
-## 📖 Learning Goals of This Project
+```python
+import torch
+from Transformer import Transformer
 
-Understand the mathematical and architectural foundations of Transformers
+model = Transformer(
+    src_vocab_size=10000,
+    tgt_vocab_size=10000,
+    embed_size=512,
+    num_heads=8,
+    num_encoder_layer=6,
+    num_decoder_layer=6,
+    d_ff=2048,
+    dropout=0.1,
+    max_seq_len=200
+)
 
-Implement attention mechanisms manually instead of using high-level libraries
+# src/tgt: (batch_size, seq_len) integer token ids
+src = torch.randint(1, 10000, (32, 50))
+tgt = torch.randint(1, 10000, (32, 50))
 
-Learn tensor shape manipulation, masking, and multi-head attention internals
+# Optional: boolean padding masks (True = real token, False = pad)
+src_mask = (src != 0)  # (batch_size, src_len)
+tgt_mask = (tgt != 0)  # (batch_size, tgt_len)
 
-Build a reusable Transformer architecture for future research and experiments
+logits = model(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
+print(logits.shape)  # (32, 50, 10000)
+```
 
-## 📚 Reference Paper
+---
 
-Vaswani et al., Attention Is All You Need, NeurIPS 2017
-https://arxiv.org/abs/1706.03762
+## Design Decisions
 
-## 🧩 Future Improvements
+| Decision | Detail |
+|---|---|
+| Weight tying | Target embedding weights shared with output projection |
+| Embedding scaling | Input embeddings multiplied by `sqrt(d_model)` before positional encoding |
+| Causal mask storage | Precomputed and stored as a `register_buffer` for efficiency |
+| Padding convention | `True` = valid token, `False` = padding (masked out) |
+| Default `d_ff` | `4 × embed_size` when not explicitly provided |
 
-Add training loop for machine translation tasks
+---
 
-Implement learned and rotary positional embeddings
+## Reference
 
-Add visualization for attention weights
-
-Optimize with PyTorch Lightning or Accelerate
-
-Implement GPT-style decoder-only Transformer
-
-Benchmark against HuggingFace Transformer outputs
-
-
-## ⭐ Acknowledgements
-
-This project was built for educational purposes to deeply understand the Transformer architecture and its internal workings.
+> Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, Ł., & Polosukhin, I. (2017).  
+> **Attention Is All You Need.** *Advances in Neural Information Processing Systems (NeurIPS).*  
+> https://arxiv.org/abs/1706.03762
